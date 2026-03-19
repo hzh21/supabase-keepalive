@@ -2,25 +2,41 @@ name: Supabase Keepalive
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 每天两次
-  workflow_dispatch: # 支持手动测试
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [SINGAPORE, MUMBAI] # 定义你的项目代号
+        # 定义项目后缀，需与 Secrets 中的后缀一致
+        project: [SINGAPORE, MUMBAI] 
     steps:
       - name: Ping ${{ matrix.project }} Project
+        # 将 Secrets 映射为环境变量，方便 shell 脚本读取
+        env:
+          SUPABASE_URL_SINGAPORE: ${{ secrets.SUPABASE_URL_SINGAPORE }}
+          SUPABASE_KEY_SINGAPORE: ${{ secrets.SUPABASE_KEY_SINGAPORE }}
+          SUPABASE_URL_MUMBAI: ${{ secrets.SUPABASE_URL_MUMBAI }}
+          SUPABASE_KEY_MUMBAI: ${{ secrets.SUPABASE_KEY_MUMBAI }}
         run: |
-          # 根据矩阵变量动态获取对应的 Secrets
-          URL="SUPABASE_URL_${{ matrix.project }}"
-          KEY="SUPABASE_KEY_${{ matrix.project }}"
+          # 使用 Bash 的间接引用语法获取对应的 URL 和 KEY
+          URL_VAR="SUPABASE_URL_${{ matrix.project }}"
+          KEY_VAR="SUPABASE_KEY_${{ matrix.project }}"
           
-          curl -X POST "${{!URL}}/rest/v1/keepalive" \
-            -H "apikey: ${{!KEY}}" \
-            -H "Authorization: Bearer ${{!KEY}}" \
+          # 注意：在 Bash 中使用 ${!VAR} 来获取变量名指向的值
+          PROJECT_URL=${!URL_VAR}
+          PROJECT_KEY=${!KEY_VAR}
+
+          if [ -z "$PROJECT_URL" ]; then
+            echo "❌ 错误: 未找到 $URL_VAR，请检查 Secrets 配置。"
+            exit 1
+          fi
+
+          curl -X POST "${PROJECT_URL}/rest/v1/keepalive" \
+            -H "apikey: ${PROJECT_KEY}" \
+            -H "Authorization: Bearer ${PROJECT_KEY}" \
             -H "Content-Type: application/json" \
             -H "Prefer: return=minimal" \
             -d '{}' --fail --show-error
